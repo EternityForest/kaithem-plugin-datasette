@@ -11,15 +11,21 @@ dependencies = [
     "datasette-write",
     "datasette-write-ui",
     "datasette-edit-schema",
-    "datasette-column-sum",
+    # https://github.com/datasette/datasette-column-sum/issues/2
+    # "datasette-column-sum",
     "datasette-plot",
     "datasette-search-all",
     "datasette-checkbox",
     "datasette-explain",
     "datasette-comments",
     "datasette-render-images",
-    "datasette-pretty-json>=0.3"
-
+    "datasette-render-markdown",
+    "datasette-pretty-json>=0.3",
+    "datasette-cluster-map",
+    "datasette-geojson",
+    "datasette-copyable",
+    "datasette-mp3-audio",
+    "datasette-import"
 ]
 
 [tool.uv]

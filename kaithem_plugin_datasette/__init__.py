@@ -1,5 +1,6 @@
 import os
 import weakref
+import copy
 from typing import Any
 
 from datasette import hookimpl
@@ -17,7 +18,9 @@ import datasette_write  # noqa
 import datasette_write_ui  # noqa
 import datasette_edit_schema  # noqa
 import datasette_comments  # noqa
-import datasette_column_sum  # noqa
+
+# Broken https://github.com/datasette/datasette-column-sum/issues/2
+# import datasette_column_sum  # noqa
 import datasette_checkbox  # noqa
 
 
@@ -40,12 +43,41 @@ datasette_instance = Datasette(
     [],
     settings={
         "base_url": "/datasette/",
+        "extra_css_urls": [
+            "/static/css/barrel.css",
+        ],
+
+    },
+    metadata={
+
+        "plugins": {
+            "datasette-cluster-map": {
+                "tile_layer": "/maptiles/tile/{z}/{x}/{y}.png",
+                "tile_layer_options": {
+                    "attribution": '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    "maxZoom": 17,
+                },
+            }
+        },
     },
 )
 
 
 datasette_application = datasette_instance.app()
-webapi.add_asgi_app("/datasette", datasette_application)
+
+
+# Workaround for https://github.com/simonw/datasette/issues/2347
+class AsgiFilter:
+    async def __call__(self, scope, receive, send):
+        if scope["path"].startswith("/datasette/datasette/"):
+            scope = copy.deepcopy(scope)
+            scope["path"] = scope["path"].replace("/datasette/datasette/", "/datasette/",1)
+            scope["raw_path"] = scope["raw_path"].replace(b"/datasette/datasette/", b"/datasette/",1)
+        return await datasette_application(scope, receive, send)
+
+
+
+webapi.add_asgi_app("/datasette", AsgiFilter())
 
 
 class pluggyhooks:
@@ -67,9 +99,9 @@ class pluggyhooks:
             cfg = db_cfg_by_datasette_id[resource]
         else:
             if action == "view-instance":
-                return webapi.has_permission("enumerate_endpoints", user=actor['id'])
+                return webapi.has_permission("enumerate_endpoints", user=actor["id"])
 
-            return webapi.has_permission("system.admin", user=actor['id'])
+            return webapi.has_permission("system.admin", user=actor["id"])
 
         read = {
             "view-database",
@@ -84,12 +116,12 @@ class pluggyhooks:
         }
 
         if action in read:
-            return webapi.has_permission(cfg.read_perms, user=actor['id'])
+            return webapi.has_permission(cfg.read_perms, user=actor["id"])
 
         if action in write:
-            return webapi.has_permission(cfg.write_perms, user=actor['id'])
+            return webapi.has_permission(cfg.write_perms, user=actor["id"])
         else:
-            return webapi.has_permission("system.admin", user=actor['id'])
+            return webapi.has_permission("system.admin", user=actor["id"])
 
 
 pm.register(pluggyhooks())
