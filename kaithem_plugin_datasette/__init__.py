@@ -6,7 +6,7 @@ from datasette.app import Datasette
 from datasette.database import Database
 
 from kaithem.api import web as webapi
-from kaithem.api.modules import relative_file_resource_dir_for_resource
+from kaithem.api.modules import filename_for_file_resource
 from kaithem.api.web import dialogs
 from kaithem.src.modules_state import ResourceType, additionalTypes
 from kaithem.src.resource_types import ResourceDictType, mutable_copy_resource
@@ -97,10 +97,7 @@ class DatasetteResourceType(ResourceType):
             module, resource, data
         )
 
-        abs_fn = os.path.join(
-            relative_file_resource_dir_for_resource(module, resource),
-            data["database_file"],
-        )
+        abs_fn = filename_for_file_resource(module, data["database_file"])
         os.makedirs(os.path.dirname(abs_fn), exist_ok=True)
         db = Database(datasette_instance, abs_fn, True, mode="rwc")
 
