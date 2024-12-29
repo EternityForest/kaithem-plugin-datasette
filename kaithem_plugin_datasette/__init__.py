@@ -4,12 +4,21 @@ from typing import Any
 from datasette import hookimpl
 from datasette.app import Datasette
 from datasette.database import Database
+from datasette.plugins import pm
 
 from kaithem.api import web as webapi
 from kaithem.api.modules import filename_for_file_resource
 from kaithem.api.web import dialogs
 from kaithem.src.modules_state import ResourceType, additionalTypes
 from kaithem.src.resource_types import ResourceDictType, mutable_copy_resource
+
+import datasette_write # noqa
+import datasette_write_ui # noqa
+import datasette_edit_schema # noqa
+import datasette_comments # noqa
+import datasette_column_sum # noqa
+import datasette_checkbox # noqa
+
 
 # Config listed by database name
 db_cfg_by_module_resource = {}
@@ -25,41 +34,6 @@ class ConfiguredDB:
         self.name = data["database_name"]
 
 
-@hookimpl
-def actor_from_request(datasette, request):
-    async def inner():
-        try:
-            return {"id": webapi.user(request.scope)}
-        except Exception:
-            return None
-
-    return inner
-
-
-@hookimpl
-async def permission_allowed(datasette, actor, action, resource):
-    cfg = db_cfg_by_module_resource[datasette]
-
-    read = {
-        "view-database",
-        "view-instance",
-        "view-table",
-        "view-query",
-    }
-    write = {
-        "insert-row",
-        "delete-row",
-        "update-row",
-    }
-
-    if action in read:
-        return webapi.has_permission(actor["id"], cfg.read_perms)
-
-    if action in write:
-        return webapi.has_permission(actor["id"], cfg.write_perms)
-    else:
-        return webapi.has_permission(actor["id"], "system.admin")
-
 
 datasette_instance = Datasette(
     [],
@@ -68,8 +42,49 @@ datasette_instance = Datasette(
     },
 )
 
+
 datasette_application = datasette_instance.app()
 webapi.add_asgi_app("/datasette", datasette_application)
+
+
+
+class pluggyhooks():
+    @hookimpl
+    def actor_from_request(self, datasette, request):
+        print(f"actor_from_request: {datasette} {request}")
+        try:
+            return {"id": webapi.user(request.scope)}
+        except Exception:
+            return None
+
+
+
+    @hookimpl
+    def permission_allowed(self, datasette, actor, action, resource):
+        print(f"permission_allowed: {datasette} {actor} {action} {resource}")
+        cfg = db_cfg_by_module_resource[datasette]
+
+        read = {
+            "view-database",
+            "view-instance",
+            "view-table",
+            "view-query",
+        }
+        write = {
+            "insert-row",
+            "delete-row",
+            "update-row",
+        }
+
+        if action in read:
+            return webapi.has_permission(actor["id"], cfg.read_perms)
+
+        if action in write:
+            return webapi.has_permission(actor["id"], cfg.write_perms)
+        else:
+            return webapi.has_permission(actor["id"], "system.admin")
+
+pm.register(pluggyhooks())
 
 
 class DatasetteResourceType(ResourceType):
@@ -99,7 +114,7 @@ class DatasetteResourceType(ResourceType):
 
         abs_fn = filename_for_file_resource(module, data["database_file"])
         os.makedirs(os.path.dirname(abs_fn), exist_ok=True)
-        db = Database(datasette_instance, abs_fn, True, mode="rwc")
+        db = Database(datasette_instance, abs_fn, is_mutable=True, mode="rwc")
 
         db_cfg_by_module_resource[(module,resource)].db = db
 

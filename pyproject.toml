@@ -22,5 +22,5 @@ dependencies = [
 
 ]
 
-[tool.uv.sources]
-foo = { path = "../KaithemAutomation" }
+[tool.uv]
+package = true
