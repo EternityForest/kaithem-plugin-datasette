@@ -13,6 +13,7 @@ from kaithem.api.modules import filename_for_file_resource
 from kaithem.api.web import dialogs
 from kaithem.src.modules_state import ResourceType, additionalTypes
 from kaithem.src.resource_types import ResourceDictType, mutable_copy_resource
+from starlette.responses import Response
 
 import datasette_write  # noqa
 import datasette_write_ui  # noqa
@@ -43,13 +44,8 @@ datasette_instance = Datasette(
     [],
     settings={
         "base_url": "/datasette/",
-        "extra_css_urls": [
-            "/static/css/barrel.css",
-        ],
-
     },
     metadata={
-
         "plugins": {
             "datasette-cluster-map": {
                 "tile_layer": "/maptiles/tile/{z}/{x}/{y}.png",
@@ -67,14 +63,29 @@ datasette_application = datasette_instance.app()
 
 
 # Workaround for https://github.com/simonw/datasette/issues/2347
+# And quick hack to add a static path
 class AsgiFilter:
     async def __call__(self, scope, receive, send):
+        # if (
+        #     scope["path"] == "/datasette/barrel-datasette.css"
+        #     or scope["path"] == "/datasette/datasette/barrel-datasette.css"
+        # ):
+        #     with open(
+        #         os.path.join(os.path.dirname(__file__), "barrel-datasette.css")
+        #     ) as f:
+        #         d = f.read()
+        #     response = Response(d, media_type="text/plain")
+        #     return await response(scope, receive, send)
+
         if scope["path"].startswith("/datasette/datasette/"):
             scope = copy.deepcopy(scope)
-            scope["path"] = scope["path"].replace("/datasette/datasette/", "/datasette/",1)
-            scope["raw_path"] = scope["raw_path"].replace(b"/datasette/datasette/", b"/datasette/",1)
+            scope["path"] = scope["path"].replace(
+                "/datasette/datasette/", "/datasette/", 1
+            )
+            scope["raw_path"] = scope["raw_path"].replace(
+                b"/datasette/datasette/", b"/datasette/", 1
+            )
         return await datasette_application(scope, receive, send)
-
 
 
 webapi.add_asgi_app("/datasette", AsgiFilter())
@@ -96,6 +107,8 @@ class pluggyhooks:
             return None
 
         if resource:
+            if not isinstance(resource, str):
+                resource = resource.name
             cfg = db_cfg_by_datasette_id[resource]
         else:
             if action == "view-instance":
@@ -122,6 +135,10 @@ class pluggyhooks:
             return webapi.has_permission(cfg.write_perms, user=actor["id"])
         else:
             return webapi.has_permission("system.admin", user=actor["id"])
+
+    # @hookimpl
+    # def extra_css_urls(self, *a, **kw):
+    #     return ["/datasette/barrel-datasette.css"]
 
 
 pm.register(pluggyhooks())
