@@ -1,4 +1,5 @@
 import os
+import weakref
 from typing import Any
 
 from datasette import hookimpl
@@ -12,16 +13,17 @@ from kaithem.api.web import dialogs
 from kaithem.src.modules_state import ResourceType, additionalTypes
 from kaithem.src.resource_types import ResourceDictType, mutable_copy_resource
 
-import datasette_write # noqa
-import datasette_write_ui # noqa
-import datasette_edit_schema # noqa
-import datasette_comments # noqa
-import datasette_column_sum # noqa
-import datasette_checkbox # noqa
+import datasette_write  # noqa
+import datasette_write_ui  # noqa
+import datasette_edit_schema  # noqa
+import datasette_comments  # noqa
+import datasette_column_sum  # noqa
+import datasette_checkbox  # noqa
 
 
 # Config listed by database name
 db_cfg_by_module_resource = {}
+db_cfg_by_datasette_id = {}
 
 
 class ConfiguredDB:
@@ -32,7 +34,6 @@ class ConfiguredDB:
         self.write_perms = data["write_perms"]
         self.file = data["database_file"]
         self.name = data["database_name"]
-
 
 
 datasette_instance = Datasette(
@@ -47,22 +48,28 @@ datasette_application = datasette_instance.app()
 webapi.add_asgi_app("/datasette", datasette_application)
 
 
-
-class pluggyhooks():
+class pluggyhooks:
     @hookimpl
     def actor_from_request(self, datasette, request):
-        print(f"actor_from_request: {datasette} {request}")
         try:
             return {"id": webapi.user(request.scope)}
         except Exception:
             return None
 
-
-
     @hookimpl
     def permission_allowed(self, datasette, actor, action, resource):
-        print(f"permission_allowed: {datasette} {actor} {action} {resource}")
-        cfg = db_cfg_by_module_resource[datasette]
+        if isinstance(resource, tuple):
+            resource = resource[0]
+        if actor is None:
+            return None
+
+        if resource:
+            cfg = db_cfg_by_datasette_id[resource]
+        else:
+            if action == "view-instance":
+                return webapi.has_permission("enumerate_endpoints", user=actor['id'])
+
+            return webapi.has_permission("system.admin", user=actor['id'])
 
         read = {
             "view-database",
@@ -77,12 +84,13 @@ class pluggyhooks():
         }
 
         if action in read:
-            return webapi.has_permission(actor["id"], cfg.read_perms)
+            return webapi.has_permission(cfg.read_perms, user=actor['id'])
 
         if action in write:
-            return webapi.has_permission(actor["id"], cfg.write_perms)
+            return webapi.has_permission(cfg.write_perms, user=actor['id'])
         else:
-            return webapi.has_permission(actor["id"], "system.admin")
+            return webapi.has_permission("system.admin", user=actor['id'])
+
 
 pm.register(pluggyhooks())
 
@@ -108,7 +116,7 @@ class DatasetteResourceType(ResourceType):
 
     def on_load(self, module: str, resource: str, data: ResourceDictType):
         self.check_conflict(module, resource, data)
-        db_cfg_by_module_resource[(module,resource)] = ConfiguredDB(
+        db_cfg_by_module_resource[(module, resource)] = ConfiguredDB(
             module, resource, data
         )
 
@@ -116,7 +124,11 @@ class DatasetteResourceType(ResourceType):
         os.makedirs(os.path.dirname(abs_fn), exist_ok=True)
         db = Database(datasette_instance, abs_fn, is_mutable=True, mode="rwc")
 
-        db_cfg_by_module_resource[(module,resource)].db = db
+        db_cfg_by_module_resource[(module, resource)].db = db
+
+        db_cfg_by_datasette_id[data["database_name"]] = db_cfg_by_module_resource[
+            (module, resource)
+        ]
 
         datasette_instance.add_database(db, data["database_name"])
 
@@ -171,10 +183,9 @@ class DatasetteResourceType(ResourceType):
         )
 
         d.text_input(
-            "database_file", 
-                        default="my_db.db",
-
-            title="Database File(Relative paths start in the module)"
+            "database_file",
+            default="my_db.db",
+            title="Database File(Relative paths start in the module)",
         )
 
         d.text_input(
