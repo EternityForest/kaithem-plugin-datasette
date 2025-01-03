@@ -66,17 +66,6 @@ datasette_application = datasette_instance.app()
 # And quick hack to add a static path
 class AsgiFilter:
     async def __call__(self, scope, receive, send):
-        # if (
-        #     scope["path"] == "/datasette/barrel-datasette.css"
-        #     or scope["path"] == "/datasette/datasette/barrel-datasette.css"
-        # ):
-        #     with open(
-        #         os.path.join(os.path.dirname(__file__), "barrel-datasette.css")
-        #     ) as f:
-        #         d = f.read()
-        #     response = Response(d, media_type="text/plain")
-        #     return await response(scope, receive, send)
-
         if scope["path"].startswith("/datasette/datasette/"):
             scope = copy.deepcopy(scope)
             scope["path"] = scope["path"].replace(
@@ -135,11 +124,6 @@ class pluggyhooks:
             return webapi.has_permission(cfg.write_perms, user=actor["id"])
         else:
             return webapi.has_permission("system.admin", user=actor["id"])
-
-    # @hookimpl
-    # def extra_css_urls(self, *a, **kw):
-    #     return ["/datasette/barrel-datasette.css"]
-
 
 pm.register(pluggyhooks())
 
