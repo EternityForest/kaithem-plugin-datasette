@@ -11,7 +11,7 @@ from datasette.plugins import pm
 from kaithem.api import web as webapi
 from kaithem.api.modules import filename_for_file_resource
 from kaithem.api.web import dialogs
-from kaithem.src.modules_state import ResourceType, additionalTypes
+from kaithem.src.modules_state import ResourceType, resource_types
 from kaithem.src.resource_types import ResourceDictType, mutable_copy_resource
 from starlette.responses import Response
 
@@ -267,4 +267,4 @@ class DatasetteResourceType(ResourceType):
 
 
 drt = DatasetteResourceType("datasette", mdi_icon="database")
-additionalTypes["datasette"] = drt
+resource_types["datasette"] = drt

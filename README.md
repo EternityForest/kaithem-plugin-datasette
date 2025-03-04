@@ -9,6 +9,10 @@ If you did a pipx install of Kaithem, you should just be able to do:
 
 and reboot or restart kaithem.
 
+The new UV way is
+
+`uv tool install --with kaithem-plugin-datasette kaithem`
+
 ## Dev Install
 For testing/, activate your kaithem virtual environment and do:
 
