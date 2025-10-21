@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "kaithem>=0.87.0",
+    "kaithem>=0.93.0",
     "kaithem",
     "datasette>=1.0a16",
     "datasette-write",

@@ -1,5 +1,5 @@
+from __future__ import annotations
 import os
-import weakref
 import copy
 from typing import Any
 
@@ -11,9 +11,10 @@ from datasette.plugins import pm
 from kaithem.api import web as webapi
 from kaithem.api.modules import filename_for_file_resource
 from kaithem.api.web import dialogs
+import kaithem.api.apps_page
+from kaithem.src.plugins.CorePluginTagHistorian import on_disk_history_db_path
 from kaithem.src.modules_state import ResourceType, resource_types
 from kaithem.src.resource_types import ResourceDictType, mutable_copy_resource
-from starlette.responses import Response
 
 import datasette_write  # noqa
 import datasette_write_ui  # noqa
@@ -27,7 +28,7 @@ import datasette_checkbox  # noqa
 
 # Config listed by database name
 db_cfg_by_module_resource = {}
-db_cfg_by_datasette_id = {}
+db_cfg_by_datasette_id: dict[str, ConfiguredDB] = {}
 
 
 class ConfiguredDB:
@@ -39,8 +40,24 @@ class ConfiguredDB:
         self.file = data["database_file"]
         self.name = data["database_name"]
 
+        app = kaithem.api.apps_page.App(
+            "datasette-"+data["database_name"],
+            title=data.get("database_title", data["database_name"]),
+            module=module if not module=="__builtin_dbs__" else None,
+            resource=resource if not module=="__builtin_dbs__" else None,
+            url=f"/datasette/{data['database_name']}",
+        )
 
-datasette_instance = Datasette(
+        self.app = app
+        kaithem.api.apps_page.add_app(app)
+    
+    def close(self):
+        kaithem.api.apps_page.remove_app(self.app)
+
+
+
+
+datasette_instance: Datasette = Datasette(
     [],
     settings={
         "base_url": "/datasette/",
@@ -60,6 +77,23 @@ datasette_instance = Datasette(
 
 
 datasette_application = datasette_instance.app()
+
+
+tag_history_db = ConfiguredDB(
+    "__builtin_dbs__",
+    "tag_history",
+    {
+        "database_file": on_disk_history_db_path,
+        "database_name": "kaithem_tag_history",
+        "database_title": "Tag History",
+        "read_perms": "view_admin_info",
+        "write_perms": "system_admin",
+    },
+)
+
+db = Database(datasette_instance, on_disk_history_db_path, is_mutable=True, mode="rwc")
+db_cfg_by_datasette_id["kaithem_tag_history"] = tag_history_db
+datasette_instance.add_database(db, "kaithem_tag_history")
 
 
 # Workaround for https://github.com/simonw/datasette/issues/2347
@@ -97,7 +131,7 @@ class pluggyhooks:
 
         if resource:
             if not isinstance(resource, str):
-                resource = resource.name
+                resource = resource.name # type: ignore
             cfg = db_cfg_by_datasette_id[resource]
         else:
             if action == "view-instance":
@@ -185,7 +219,7 @@ class DatasetteResourceType(ResourceType):
 
     def on_create_request(self, module, resource, kwargs):
         self.check_conflict(module, resource, kwargs)
-        d = {"resource_type": self.type}
+        d = {"resource": {"type": self.type}}
         d.update(kwargs)
         d.pop("name")
         d.pop("Save", None)
